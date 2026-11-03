@@ -24,6 +24,552 @@ jobs:
         with:
           gradle-version: 8.10.2
 
+      - name: Create project files
+        run: |
+          mkdir -p app/src/main/java/com/example/fadhkuruni
+          mkdir -p app/src/main
+
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  google {
+                      content {
+                          includeGroupByRegex("com\\.android.*")
+                          includeGroupByRegex("com\\.google.*")
+                          includeGroupByRegex("androidx.*")
+                      }
+                  }
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "فاذكروني أذكركم"
+          include(":app")
+          EOF
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+
+          android {
+              namespace = "com.example.fadhkuruni"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "com.example.fadhkuruni"
+                  minSdk = 24
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+          }
+
+          dependencies {
+              val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+              implementation(composeBom)
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.activity:activity-compose:1.9.3")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="فاذكروني أذكركم"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <receiver
+                      android:name=".ReminderReceiver"
+                      android:exported="false" />
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                      </intent-filter>
+                  </receiver>
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/example/fadhkuruni/Adhkar.kt <<'EOF'
+          package com.example.fadhkuruni
+
+          /** نص الذكر مكتوب مباشرة في الكود، وعدد التكرار المطلوب. */
+          data class Dhikr(
+              val text: String,
+              val repeat: Int = 1,
+          )
+
+          enum class Category(val title: String, val items: List<Dhikr>) {
+              MORNING(
+                  "أذكار الصباح",
+                  listOf(
+                      Dhikr("أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لا إِلَهَ إِلاَّ اللهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ"),
+                      Dhikr("اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ"),
+                      Dhikr("أَصْبَحْنَا عَلَى فِطْرَةِ الإِسْلاَمِ، وَعَلَى كَلِمَةِ الإِخْلاَصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ صلى الله عليه وسلم، وَعَلَى مِلَّةِ أَبِينَا إِبْرَاهِيمَ حَنِيفاً مُسْلِمًا وَمَا كَانَ مِنَ الْمُشْرِكِينَ"),
+                      Dhikr("اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَفْوَ وَالْعَافِيَةَ فِي الدُّنْيَا وَالآخِرَةِ"),
+                      Dhikr("حَسْبِيَ اللهُ لا إِلَهَ إِلاَّ هُوَ، عَلَيْهِ تَوَكَّلْتُ، وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", 7),
+                      Dhikr("أَعُوذُ بِكَلِمَاتِ اللهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ", 3),
+                      Dhikr("سُبْحَانَ اللهِ وَبِحَمْدِهِ", 100),
+                  ),
+              ),
+              EVENING(
+                  "أذكار المساء",
+                  listOf(
+                      Dhikr("أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لا إِلَهَ إِلاَّ اللهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ"),
+                      Dhikr("اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ"),
+                      Dhikr("أَمْسَيْنَا عَلَى فِطْرَةِ الإِسْلاَمِ، وَعَلَى كَلِمَةِ الإِخْلاَصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ صلى الله عليه وسلم، وَعَلَى مِلَّةِ أَبِينَا إِبْرَاهِيمَ حَنِيفاً مُسْلِمًا وَمَا كَانَ مِنَ الْمُشْرِكِينَ"),
+                      Dhikr("اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَفْوَ وَالْعَافِيَةَ فِي الدُّنْيَا وَالآخِرَةِ"),
+                      Dhikr("حَسْبِيَ اللهُ لا إِلَهَ إِلاَّ هُوَ، عَلَيْهِ تَوَكَّلْتُ، وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", 7),
+                      Dhikr("أَعُوذُ بِكَلِمَاتِ اللهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ", 3),
+                  ),
+              ),
+              AFTER_PRAYER(
+                  "أذكار بعد الصلاة",
+                  listOf(
+                      Dhikr("أَسْتَغْفِرُ اللهَ", 3),
+                      Dhikr("اللَّهُمَّ أَنْتَ السَّلامُ، وَمِنْكَ السَّلامُ، تَبَارَكْتَ يَا ذَا الْجَلالِ وَالإِكْرَامِ"),
+                      Dhikr("سُبْحَانَ اللهِ", 33),
+                      Dhikr("الْحَمْدُ لِلهِ", 33),
+                      Dhikr("اللهُ أَكْبَرُ", 33),
+                      Dhikr("لا إِلَهَ إِلاَّ اللهُ وَحْدَهُ لا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ"),
+                  ),
+              ),
+              SLEEP(
+                  "أذكار النوم",
+                  listOf(
+                      Dhikr("بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا"),
+                      Dhikr("اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", 3),
+                      Dhikr("سُبْحَانَ اللهِ", 33),
+                      Dhikr("الْحَمْدُ لِلهِ", 33),
+                      Dhikr("اللهُ أَكْبَرُ", 34),
+                  ),
+              ),
+              WAKING(
+                  "أذكار الاستيقاظ",
+                  listOf(
+                      Dhikr("الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ"),
+                  ),
+              ),
+              LEAVING_HOME(
+                  "أذكار الخروج من المنزل",
+                  listOf(
+                      Dhikr("بِسْمِ اللهِ، تَوَكَّلْتُ عَلَى اللهِ، وَلا حَوْلَ وَلا قُوَّةَ إِلاَّ بِاللهِ"),
+                      Dhikr("اللَّهُمَّ إِنِّي أَعُوذُ بِكَ أَنْ أَضِلَّ أَوْ أُضَلَّ، أَوْ أَزِلَّ أَوْ أُزَلَّ، أَوْ أَظْلِمَ أَوْ أُظْلَمَ، أَوْ أَجْهَلَ أَوْ يُجْهَلَ عَلَيَّ"),
+                  ),
+              ),
+              EATING(
+                  "أذكار الطعام",
+                  listOf(
+                      Dhikr("بِسْمِ اللهِ"),
+                      Dhikr("بِسْمِ اللهِ أَوَّلَهُ وَآخِرَهُ"),
+                      Dhikr("الْحَمْدُ لِلَّهِ الَّذِي أَطْعَمَنِي هَذَا وَرَزَقَنِيهِ مِنْ غَيْرِ حَوْلٍ مِنِّي وَلا قُوَّةٍ"),
+                  ),
+              ),
+              ISTIGHFAR(
+                  "الاستغفار",
+                  listOf(
+                      Dhikr("أَسْتَغْفِرُ اللهَ وَأَتُوبُ إِلَيْهِ", 100),
+                      Dhikr("رَبِّ اغْفِرْ لِي وَتُبْ عَلَيَّ إِنَّكَ أَنْتَ التَّوَّابُ الرَّحِيمُ", 100),
+                  ),
+              ),
+          }
+          EOF
+
+          cat > app/src/main/java/com/example/fadhkuruni/Storage.kt <<'EOF'
+          package com.example.fadhkuruni
+
+          import android.content.Context
+          import java.text.SimpleDateFormat
+          import java.util.Date
+          import java.util.Locale
+
+          /**
+           * حفظ عدادات الأذكار. العدادات تُصفَّر تلقائياً في يوم جديد.
+           */
+          object CounterStore {
+              private const val PREFS = "adhkar_counts"
+              private const val KEY_DAY = "__day"
+
+              private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+              fun load(context: Context): Map<String, Int> {
+                  val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                  if (prefs.getString(KEY_DAY, null) != today()) return emptyMap()
+                  val result = mutableMapOf<String, Int>()
+                  for ((key, value) in prefs.all) {
+                      if (key != KEY_DAY && value is Int) result[key] = value
+                  }
+                  return result
+              }
+
+              fun save(context: Context, key: String, value: Int) {
+                  val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                  val editor = prefs.edit()
+                  // إذا تغير اليوم نمسح عدادات الأمس أولاً
+                  if (prefs.getString(KEY_DAY, null) != today()) editor.clear()
+                  editor.putString(KEY_DAY, today()).putInt(key, value).apply()
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/example/fadhkuruni/Reminders.kt <<'EOF'
+          package com.example.fadhkuruni
+
+          import android.Manifest
+          import android.app.AlarmManager
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.PendingIntent
+          import android.content.BroadcastReceiver
+          import android.content.Context
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.os.Build
+          import androidx.core.app.NotificationCompat
+          import java.util.Calendar
+
+          /** تذكيرات يومية: الصباح 6:30 والمساء 5:30 مساءً. */
+          object Reminders {
+              private const val CHANNEL_ID = "adhkar_reminders"
+              private const val PREFS = "settings"
+              private const val KEY_ENABLED = "reminders_enabled"
+              private const val EXTRA_CATEGORY = "category"
+              private const val REQ_MORNING = 101
+              private const val REQ_EVENING = 102
+
+              fun isEnabled(context: Context): Boolean =
+                  context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
+
+              fun setEnabled(context: Context, enabled: Boolean) {
+                  context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                      .edit().putBoolean(KEY_ENABLED, enabled).apply()
+              }
+
+              fun schedule(context: Context) {
+                  scheduleAt(context, Category.MORNING, REQ_MORNING, 6, 30)
+                  scheduleAt(context, Category.EVENING, REQ_EVENING, 17, 30)
+              }
+
+              fun cancel(context: Context) {
+                  val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                  am.cancel(pendingIntent(context, Category.MORNING, REQ_MORNING))
+                  am.cancel(pendingIntent(context, Category.EVENING, REQ_EVENING))
+              }
+
+              private fun scheduleAt(context: Context, category: Category, requestCode: Int, hour: Int, minute: Int) {
+                  val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                  val cal = Calendar.getInstance().apply {
+                      set(Calendar.HOUR_OF_DAY, hour)
+                      set(Calendar.MINUTE, minute)
+                      set(Calendar.SECOND, 0)
+                      set(Calendar.MILLISECOND, 0)
+                      if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+                  }
+                  am.setInexactRepeating(
+                      AlarmManager.RTC_WAKEUP,
+                      cal.timeInMillis,
+                      AlarmManager.INTERVAL_DAY,
+                      pendingIntent(context, category, requestCode),
+                  )
+              }
+
+              private fun pendingIntent(context: Context, category: Category, requestCode: Int): PendingIntent {
+                  val intent = Intent(context, ReminderReceiver::class.java)
+                      .putExtra(EXTRA_CATEGORY, category.name)
+                  return PendingIntent.getBroadcast(
+                      context,
+                      requestCode,
+                      intent,
+                      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                  )
+              }
+
+              fun showNotification(context: Context, category: Category) {
+                  if (Build.VERSION.SDK_INT >= 33 &&
+                      context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                  ) return
+
+                  val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      nm.createNotificationChannel(
+                          NotificationChannel(CHANNEL_ID, "تذكير الأذكار", NotificationManager.IMPORTANCE_DEFAULT)
+                      )
+                  }
+                  val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                      .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                      .setContentTitle(category.title)
+                      .setContentText("حان وقت ${category.title}")
+                      .setAutoCancel(true)
+                      .build()
+                  nm.notify(category.ordinal, notification)
+              }
+
+              /** يُستدعى من ReminderReceiver عند وصول المنبّه. */
+              fun handleAlarm(context: Context, intent: Intent) {
+                  val name = intent.getStringExtra(EXTRA_CATEGORY) ?: return
+                  val category = runCatching { Category.valueOf(name) }.getOrNull() ?: return
+                  showNotification(context, category)
+              }
+          }
+
+          class ReminderReceiver : BroadcastReceiver() {
+              override fun onReceive(context: Context, intent: Intent) {
+                  Reminders.handleAlarm(context, intent)
+              }
+          }
+
+          /** المنبّهات تُمسح عند إعادة تشغيل الجهاز، فنعيد جدولتها هنا. */
+          class BootReceiver : BroadcastReceiver() {
+              override fun onReceive(context: Context, intent: Intent) {
+                  if (intent.action == Intent.ACTION_BOOT_COMPLETED && Reminders.isEnabled(context)) {
+                      Reminders.schedule(context)
+                  }
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/example/fadhkuruni/MainActivity.kt <<'EOF'
+          package com.example.fadhkuruni
+
+          import android.Manifest
+          import android.os.Build
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.compose.setContent
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.LazyRow
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.lazy.itemsIndexed
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.platform.LocalLayoutDirection
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.unit.LayoutDirection
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      MaterialTheme {
+                          // تخطيط من اليمين إلى اليسار للعربية
+                          CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                              AdhkarScreen()
+                          }
+                      }
+                  }
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun AdhkarScreen() {
+              val context = LocalContext.current
+              var selected by remember { mutableStateOf(Category.MORNING) }
+
+              // العدادات محفوظة لليوم الحالي ومُستعادة عند فتح التطبيق
+              val counts = remember {
+                  mutableStateMapOf<String, Int>().apply { putAll(CounterStore.load(context)) }
+              }
+              var remindersOn by remember { mutableStateOf(Reminders.isEnabled(context)) }
+
+              val permissionLauncher = rememberLauncherForActivityResult(
+                  ActivityResultContracts.RequestPermission()
+              ) { /* حتى لو رُفض الإذن تبقى الجدولة، والإشعار لن يظهر بدون إذن */ }
+
+              val onToggleReminders: (Boolean) -> Unit = { on ->
+                  remindersOn = on
+                  Reminders.setEnabled(context, on)
+                  if (on) {
+                      if (Build.VERSION.SDK_INT >= 33) {
+                          permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                      }
+                      Reminders.schedule(context)
+                  } else {
+                      Reminders.cancel(context)
+                  }
+              }
+
+              val setCount: (String, Int) -> Unit = { key, value ->
+                  counts[key] = value
+                  CounterStore.save(context, key, value)
+              }
+
+              Surface(modifier = Modifier.fillMaxSize()) {
+                  Column(modifier = Modifier.fillMaxSize()) {
+                      TopAppBar(
+                          title = { Text("فاذكروني أذكركم") },
+                          actions = {
+                              Row(
+                                  verticalAlignment = Alignment.CenterVertically,
+                                  modifier = Modifier.padding(end = 8.dp),
+                              ) {
+                                  Text("تذكير", style = MaterialTheme.typography.labelLarge)
+                                  Spacer(Modifier.width(4.dp))
+                                  Switch(checked = remindersOn, onCheckedChange = onToggleReminders)
+                              }
+                          },
+                      )
+
+                      LazyRow(
+                          modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                          horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      ) {
+                          items(Category.entries) { category ->
+                              FilterChip(
+                                  selected = category == selected,
+                                  onClick = { selected = category },
+                                  label = { Text(category.title) },
+                              )
+                          }
+                      }
+
+                      LazyColumn(
+                          modifier = Modifier.fillMaxSize(),
+                          contentPadding = PaddingValues(12.dp),
+                          verticalArrangement = Arrangement.spacedBy(10.dp),
+                      ) {
+                          itemsIndexed(selected.items) { index, dhikr ->
+                              val key = "${selected.name}-$index"
+                              val done = counts[key] ?: 0
+                              DhikrCard(
+                                  dhikr = dhikr,
+                                  done = done,
+                                  onTap = {
+                                      if (done < dhikr.repeat) setCount(key, done + 1)
+                                  },
+                                  onReset = { setCount(key, 0) },
+                              )
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun DhikrCard(
+              dhikr: Dhikr,
+              done: Int,
+              onTap: () -> Unit,
+              onReset: () -> Unit,
+          ) {
+              val finished = done >= dhikr.repeat
+              Card(
+                  modifier = Modifier.fillMaxWidth().clickable(onClick = onTap),
+                  shape = RoundedCornerShape(16.dp),
+                  colors = CardDefaults.cardColors(
+                      containerColor = if (finished) MaterialTheme.colorScheme.primaryContainer
+                      else MaterialTheme.colorScheme.surfaceVariant,
+                  ),
+              ) {
+                  Column(modifier = Modifier.padding(16.dp)) {
+                      Text(
+                          text = dhikr.text,
+                          fontSize = 20.sp,
+                          lineHeight = 34.sp,
+                          textAlign = TextAlign.Justify,
+                          modifier = Modifier.fillMaxWidth(),
+                      )
+                      Spacer(Modifier.height(12.dp))
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                          Text(
+                              text = if (finished) "تم ✓ ($done/${dhikr.repeat})" else "$done / ${dhikr.repeat}",
+                              fontWeight = FontWeight.Bold,
+                              modifier = Modifier.weight(1f),
+                          )
+                          Text(
+                              text = "إعادة",
+                              modifier = Modifier.clickable(onClick = onReset).padding(8.dp),
+                              style = MaterialTheme.typography.labelLarge,
+                          )
+                      }
+                  }
+              }
+          }
+          EOF
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
 
